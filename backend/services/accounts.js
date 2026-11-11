@@ -5,11 +5,16 @@ import { pool } from '../config/db.js';
 const bcryptRounds = 12;
 const dummyHash = await bcrypt.hash(randomBytes(32).toString('hex'), bcryptRounds);
 
-export async function createAccount({ fullName, email, password, role }) {
+export async function createAccount({ firstName, lastName, middleInitial, email, password, role, course, studentNumber, yearLevel, section }) {
+  const fullName = middleInitial ? `${firstName} ${middleInitial}. ${lastName}` : `${firstName} ${lastName}`;
   const hash = await bcrypt.hash(password, bcryptRounds);
   await pool.query(
-    'INSERT INTO public.users (full_name, email, password_hash, role) VALUES ($1, $2, $3, $4)',
-    [fullName, email, hash, role]
+    `INSERT INTO public.users (
+       full_name, email, password_hash, role,
+       course, student_number, year_level, section
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [fullName, email, hash, role,
+      course ?? null, studentNumber ?? null, yearLevel ?? null, section ?? null]
   );
 }
 

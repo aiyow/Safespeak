@@ -1,6 +1,7 @@
 import { Router, json } from 'express';
 import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
+import multer from 'multer';
 import { z } from 'zod';
 import { clientOrigin, cookieOptions, sessionCookie, sessionDuration, testRegistration } from '../config/auth.js';
 import { requireSession } from '../middleware/session.js';
@@ -13,13 +14,27 @@ const password = z.string().min(1).refine(value => Buffer.byteLength(value, 'utf
   message: 'Password must be at most 72 UTF-8 bytes.'
 });
 const login = z.strictObject({ email, password });
-const registration = login.extend({
-  fullName: z.string().trim().min(1).max(150),
+const accountDetails = login.extend({
+  firstName: z.string().trim().min(1, 'Enter your first name.').max(70, 'First name must be at most 70 characters.'),
+  lastName: z.string().trim().min(1, 'Enter your last name.').max(70, 'Last name must be at most 70 characters.'),
+  middleInitial: z.string().trim().regex(/^(?:\p{L}\.?)?$/u, 'Enter one letter for the middle initial.').default('')
+    .transform(value => value.replace(/\.$/, '')),
   password: password.refine(value => [...value].length >= 12, {
     message: 'Use at least 12 characters for your password.'
-  }),
-  role: z.enum(roles)
+  })
 });
+const registration = z.discriminatedUnion('role', [
+  accountDetails.extend({
+    role: z.literal('student'),
+    course: z.enum(['BSIT', 'BSCS'], { error: 'Select BSIT or BSCS.' }),
+    studentNumber: z.string({ error: 'Enter your student number.' }).trim().toUpperCase()
+      .regex(/^\d{3}-\d{5}[A-Z]$/, 'Use the student number format 234-12345M.'),
+    yearLevel: z.enum(['1', '2', '3', '4'], { error: 'Select your current year.' }).transform(Number),
+    section: z.string({ error: 'Enter your section.' }).trim()
+      .min(1, 'Enter your section.').max(30, 'Section must be at most 30 characters.')
+  }),
+  accountDetails.extend({ role: z.enum(['personnel', 'admin']) })
+]);
 
 function attemptLimit(limit, options = {}) {
   return rateLimit({
@@ -37,6 +52,22 @@ function requireJson(req, res, next) {
     return res.status(415).json({ message: 'Use application/json for this request.' });
   }
   next();
+}
+
+const parseRegistrationForm = multer({
+  limits: { fields: 10, fieldNameSize: 40, fieldSize: 1024, parts: 11 }
+}).none();
+
+function readRegistrationBody(req, res, next) {
+  if (!req.is('multipart/form-data')) return requireJson(req, res, next);
+
+  parseRegistrationForm(req, res, error => {
+    if (!error) return next();
+    if (error instanceof multer.MulterError && error.code !== 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(413).json({ message: 'Registration form exceeds the allowed size.' });
+    }
+    res.status(400).json({ message: 'Send valid registration fields without file attachments.' });
+  });
 }
 
 function registrationEnabled(req) {
@@ -63,13 +94,16 @@ router.post('/register', attemptLimit(15), (req, res, next) => {
     return res.status(403).json({ message: 'Registration is closed.' });
   }
   next();
-}, requireJson, async (req, res) => {
+}, readRegistrationBody, async (req, res) => {
   const input = registration.safeParse(req.body);
   if (!input.success) {
     const issue = input.error.issues[0];
-    const message = issue.path[0] === 'password'
-      ? 'Use a password of at least 12 characters and at most 72 UTF-8 bytes.'
-      : 'Enter a valid name and email address, and select a role.';
+    const field = issue.path[0];
+    let message = issue.message;
+    if (field === 'email') message = 'Enter a valid email address.';
+    if (field === 'role') message = 'Select an account role.';
+    if (field === 'password') message = 'Use a password of at least 12 characters and at most 72 UTF-8 bytes.';
+    if (!field) message = 'Check the registration form and try again.';
     return res.status(400).json({ message });
   }
 
@@ -77,8 +111,13 @@ router.post('/register', attemptLimit(15), (req, res, next) => {
     await createAccount(input.data);
     res.status(201).json({ message: 'Account created. You can now sign in.' });
   } catch (error) {
-    if (error.code !== '23505' || error.constraint !== 'users_email_lower_unique') throw error;
-    res.status(409).json({ message: 'An account already exists for that email address.' });
+    if (error.code === '23505' && error.constraint === 'users_email_lower_unique') {
+      return res.status(409).json({ message: 'An account already exists for that email address.' });
+    }
+    if (error.code === '23505' && error.constraint === 'users_student_number_key') {
+      return res.status(409).json({ message: 'An account already exists for that student number.' });
+    }
+    throw error;
   }
 });
 
@@ -95,16 +134,20 @@ router.post('/login', attemptLimit(30), requireJson, (req, res, next) => {
   if (!user) return res.status(401).json(invalidCredentials);
 
   const token = await createSession(user.id, req.cookies[sessionCookie]);
+  res.clearCookie(sessionCookie, { ...cookieOptions, path: '/api/v1/auth' });
   res.cookie(sessionCookie, token, { ...cookieOptions, maxAge: sessionDuration });
   res.json({ user });
 });
 
 router.get('/me', requireSession, (req, res) => {
+  res.clearCookie(sessionCookie, { ...cookieOptions, path: '/api/v1/auth' });
+  res.cookie(sessionCookie, req.cookies[sessionCookie], { ...cookieOptions, maxAge: sessionDuration });
   res.json({ user: req.user });
 });
 
 router.post('/logout', async (req, res) => {
   await revokeSession(req.cookies[sessionCookie]);
+  res.clearCookie(sessionCookie, { ...cookieOptions, path: '/api/v1/auth' });
   res.clearCookie(sessionCookie, cookieOptions).status(204).end();
 });
 

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { randomBytes } from 'node:crypto';
 
 export const host = process.env.HOST || '127.0.0.1';
 const localHosts = new Set(['127.0.0.1', '[::1]', '::1', 'localhost']);
@@ -22,11 +23,17 @@ if (clientUrl.protocol !== 'https:' && !(localDevelopment && clientUrl.protocol 
   throw new Error('CLIENT_URL must use HTTPS outside loopback development.');
 }
 
+const jwtSecret = process.env.JWT_SECRET;
+if ((!jwtSecret && !localDevelopment) || (jwtSecret && Buffer.byteLength(jwtSecret) < 32)) {
+  throw new Error('Set JWT_SECRET to a random secret of at least 32 bytes.');
+}
+
+export const sessionSigningKey = jwtSecret || randomBytes(32);
 export const sessionDuration = 8 * 60 * 60 * 1000;
 export const sessionCookie = localDevelopment ? 'safespeak_session' : '__Host-safespeak_session';
 export const cookieOptions = {
   httpOnly: true,
   secure: !localDevelopment,
   sameSite: 'lax',
-  path: localDevelopment ? '/api/v1/auth' : '/'
+  path: '/'
 };

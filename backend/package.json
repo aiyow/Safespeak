@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js --local-signup"
+    "dev": "nodemon server.js --local-signup",
+    "test:faqs": "node scripts/test-faqs.mjs"
   },
   "keywords": [],
   "author": "",
