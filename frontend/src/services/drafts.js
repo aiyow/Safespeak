@@ -1,0 +1,7 @@
+// Browser-only draft text, separated by the signed-in student's account ID.
+export function draftStore(storage,userId) {
+  const key=`safespeak:concern-drafts:v1:${userId}`
+  function list(){const raw=storage.getItem(key);if(!raw)return [];const value=JSON.parse(raw);if(value.version!==1||!Array.isArray(value.drafts)||value.drafts.some(draft=>!draft||!['id','title','categoryId','description','savedAt'].every(field=>typeof draft[field]==='string')||!Number.isInteger(draft.version)||draft.version<1||!Number.isFinite(Date.parse(draft.savedAt))))throw new Error('Saved drafts could not be read. Your current form has not been changed.');return value.drafts}
+  function write(drafts){storage.setItem(key,JSON.stringify({version:1,drafts}))}
+  return {key,list,save(draft,expectedVersion){const drafts=list(),existing=drafts.find(item=>item.id===draft.id);if((existing?.version||0)!==expectedVersion)throw new Error('This draft changed in another tab. Reopen its saved version before editing.');const saved={id:draft.id,title:draft.title,categoryId:draft.categoryId,description:draft.description,version:expectedVersion+1,savedAt:new Date().toISOString()};write([...drafts.filter(item=>item.id!==draft.id),saved]);return saved},remove(id,expectedVersion){const drafts=list(),existing=drafts.find(item=>item.id===id);if(expectedVersion!==undefined&&(existing?.version||0)!==expectedVersion)throw new Error('This draft changed in another tab. Reopen it before discarding.');write(drafts.filter(item=>item.id!==id))}}
+}

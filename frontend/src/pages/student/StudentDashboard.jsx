@@ -1,3 +1,12 @@
+import { Profile } from '../shared/Profile.jsx'
+import { SubmitConcern } from './SubmitConcern.jsx'
+import { MyConcerns } from './MyConcerns.jsx'
+import { ConcernDetails } from '../shared/ConcernDetails.jsx'
+import { ConcernRows } from '../shared/ConcernList.jsx'
+import { useApiList } from '../../hooks/useApiList.js'
+import { Feedback } from '../../components/ModuleUI.jsx'
+import { useSearchParams } from 'react-router-dom'
+import { Notifications } from '../shared/Notifications.jsx'
 import { HelpDesk } from '../shared/HelpDesk.jsx'
 import { useState } from 'react'
 import { ArrowRight, Check, CircleHelp, Clock3, Inbox, LayoutGrid, Leaf, MessageCircle, MessageSquareText, Plus, ShieldCheck } from 'lucide-react'
@@ -24,7 +33,11 @@ const steps = [
   { title: 'Move forward', description: 'Follow the progress from submission to resolution.', icon: Check },
 ]
 
-function StudentOverview({ name, onSelect }) {
+function StudentOverview({ name, onSelect, onOpen }) {
+  const summary = useApiList('/concerns/summary')
+  const recent = useApiList('/concerns', { view: 'mine', pageSize: 5 })
+  const keys = ['total','awaitingReview','inProgress','resolved']
+  const liveMetrics = metrics.map((metric,index) => ({...metric,value:summary.error||summary.loading?'':summary.data[keys[index]]||''}))
   return (
     <>
       <div className="mb-7 flex items-center justify-between gap-[18px] max-[720px]:flex-col max-[720px]:items-start">
@@ -51,14 +64,15 @@ function StudentOverview({ name, onSelect }) {
         </div>
       </section>
 
-      <WorkspaceMetrics metrics={metrics} />
+      <Feedback loading={summary.loading || recent.loading} error={summary.error || recent.error} reload={() => {summary.reload();recent.reload()}} />
+      <WorkspaceMetrics metrics={liveMetrics} />
       <WorkspaceTable
         id="student-concerns-title"
         title="Your recent concerns"
         description="A little clarity on where things stand."
-        columns={['Concern', 'Status', 'Submitted', 'Details']}
+        columns={['Concern', 'Category', 'Status', 'Submitted', 'Details']}
         action={<button type="button" onClick={() => onSelect('concerns')} className="inline-flex items-center gap-[7px] py-1.5 text-[.77rem] font-[660] whitespace-nowrap text-[#971b31] hover:underline">View all <ArrowRight size={14} aria-hidden="true" /></button>}
-      />
+      ><ConcernRows rows={recent.loading ? [] : recent.data} onOpen={onOpen} /></WorkspaceTable>
 
       <section className="mt-7 rounded-xl border border-[#e7dcde] bg-[#fffdfd] p-[clamp(20px,3vw,30px)]" aria-labelledby="student-guidance-title">
         <h2 id="student-guidance-title" className="font-[Baskervville,Georgia,serif] text-[1.7rem] leading-tight">We're here to listen.</h2>
@@ -91,14 +105,23 @@ function StudentOverview({ name, onSelect }) {
 
 export function StudentDashboard() {
   const { user } = useAuth()
-  const [selected, setSelected] = useState('overview')
-  const section = sections.find(item => item.key === selected)
+  const [draftDirty, setDraftDirty] = useState(false)
+  const [sectionKey, setSelected] = useState('overview')
+  const [params, setParams] = useSearchParams()
+  const concernId = params.get('concern')
+  const selected = concernId ? 'concerns' : params.has('notifications') ? 'notifications' : params.has('profile') ? 'profile' : sectionKey
+  const section = sections.find(item => item.key === selected) || { label: selected === 'profile' ? 'Profile' : 'Notifications' }
   const firstName = user.fullName.trim().split(/\s+/)[0]
 
   function selectSection(key) {
+    if (selected === 'submit' && key !== 'submit' && draftDirty && !window.confirm('Leave the form with unsaved edits? Return to Submit a concern to continue, or save a browser draft first.')) return false
     setSelected(key)
+    setParams(['notifications','profile'].includes(key) ? {[key]: '1'} : {}, { replace: true })
     window.scrollTo(0, 0)
+    return true
   }
+  function openConcern(id) { if(selected === 'submit' && draftDirty && !window.confirm('Leave the form with unsaved edits? Save a browser draft first if you want to keep the text.')) return false; setSelected('concerns'); setParams({concern:id}); window.scrollTo(0, 0); return true }
+  function navigateNotification(target) { if(target.kind === 'profile')return selectSection('profile'); return target.kind === 'notifications' ? selectSection('notifications') : target.kind === 'concern' ? openConcern(target.id) : false }
 
   return (
     <div className="grid min-h-svh grid-cols-[238px_minmax(0,1fr)] bg-[#f7f4f4] text-[#271d20] [&_:focus-visible]:outline-[#b71f38] max-[720px]:grid-cols-1" data-role="student">
@@ -113,10 +136,14 @@ export function StudentDashboard() {
         </div>
       </WorkspaceSidebar>
       <div className="flex min-w-0 flex-col">
-        <WorkspaceTopbar label="Student portal" section={section.label} role="Student" name={user.fullName} />
+        <WorkspaceTopbar label="Student portal" section={section.label} role="Student" name={user.fullName} onNotificationNavigate={navigateNotification} />
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-[clamp(18px,4vw,44px)] pt-9 pb-11">
-          {selected === 'overview' && <StudentOverview name={firstName} onSelect={selectSection} />}
-          {selected === 'help' && <HelpDesk />}
+          {selected === 'overview' && <StudentOverview name={firstName} onSelect={selectSection} onOpen={openConcern} />}
+          <div hidden={selected !== 'submit'}><SubmitConcern onDirtyChange={setDraftDirty} onView={openConcern} active={selected === 'submit'} /></div>
+          {selected === 'concerns' && (concernId ? <ConcernDetails key={concernId} id={concernId} backLabel="Back to my concerns" onBack={() => selectSection('concerns')} /> : <MyConcerns onOpen={openConcern} />)}
+          {selected === 'notifications' && <Notifications onNavigate={navigateNotification} />}
+          {selected === 'profile' && <Profile />}
+          {selected === 'help' && <HelpDesk onNavigate={selectSection} />}
         </main>
         <footer className="border-t border-[#e7dcde] px-[clamp(18px,4vw,44px)] py-[18px] text-[.67rem] text-[#68595d]">SafeSpeak · College of Computing Studies</footer>
       </div>

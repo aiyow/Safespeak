@@ -20,7 +20,7 @@ export async function createAccount({ firstName, lastName, middleInitial, email,
 
 export async function verifyAccount(email, password) {
   const { rows: [account] } = await pool.query(
-    `SELECT id, full_name AS "fullName", email, role, is_active, password_hash
+    `SELECT id, full_name AS "fullName", email, role, is_intake_coordinator AS "isIntakeCoordinator", is_active, password_hash
      FROM public.users
      WHERE lower(email) = $1`,
     [email]
@@ -30,5 +30,5 @@ export async function verifyAccount(email, password) {
   if (!matches || !account?.is_active) return null;
 
   const { id, fullName, role } = account;
-  return { id, fullName, email: account.email, role };
+  return { id, fullName, email: account.email, role, isIntakeCoordinator: account.isIntakeCoordinator };
 }

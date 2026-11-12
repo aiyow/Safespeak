@@ -8,6 +8,7 @@ export function SignOutButton({ variant = 'button' }) {
   const [error, setError] = useState('')
 
   async function signOut() {
+    if (!window.dispatchEvent(new Event('safespeak:before-signout', { cancelable: true }))) return
     setError('')
     setPending(true)
     try {

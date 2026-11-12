@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {draftStore} from '../src/services/drafts.js';
+const values=new Map();const storage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)};
+const first=draftStore(storage,'student-one'),second=draftStore(storage,'student-two');
+assert.deepEqual(first.list(),[]);
+const saved=first.save({id:'one',title:'Draft',categoryId:'category',description:'Text',files:['never store files'],password:'never store passwords'},0);
+assert.equal(saved.version,1);assert.equal(second.list().length,0);assert.ok(!JSON.stringify(first.list()).includes('password'));assert.ok(!JSON.stringify(first.list()).includes('files'));
+const updated=first.save({...saved,title:'Edited'},1);assert.equal(updated.version,2);
+assert.throws(()=>first.save(saved,1),/another tab/);assert.throws(()=>first.remove('one',1),/another tab/);assert.equal(first.list()[0].title,'Edited');
+first.remove('one',2);assert.deepEqual(first.list(),[]);
+const quota=draftStore({getItem:()=>null,setItem:()=>{throw new Error('Quota exceeded')}},'one');assert.throws(()=>quota.save(saved,0),/Quota/);
+const corrupt=draftStore({getItem:()=>'{bad',setItem(){}},'one');assert.throws(()=>corrupt.list());
+console.log('PASS: browser draft isolation, persistence, stale-edit protection, deletion, quota failure, and corrupt-storage checks.');

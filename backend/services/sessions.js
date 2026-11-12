@@ -50,7 +50,7 @@ export async function getSessionUser(token) {
   if (!hash) return null;
 
   const { rows: [user] } = await pool.query(
-    `SELECT u.id, u.full_name AS "fullName", u.email, u.role
+    `SELECT u.id, u.full_name AS "fullName", u.email, u.role, u.is_intake_coordinator AS "isIntakeCoordinator"
      FROM public.auth_sessions s
      JOIN public.users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > now() AND u.is_active`,

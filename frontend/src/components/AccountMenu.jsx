@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Bell, ChevronDown, Settings, UserRound } from 'lucide-react'
+import { ChevronDown, Settings, UserRound } from 'lucide-react'
+import { NotificationBell } from './NotificationBell.jsx'
 import { useAuth } from '../context/authContext.js'
 import { SignOutButton } from './SignOutButton.jsx'
 
-export function AccountMenu({ name, role }) {
+export function AccountMenu({ name, role, onNotificationNavigate }) {
   const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const container = useRef(null)
@@ -32,9 +33,7 @@ export function AccountMenu({ name, role }) {
 
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <button type="button" disabled aria-label="Notifications unavailable" title="Notifications are not available yet" className="grid size-8 shrink-0 place-items-center rounded-lg border border-[#e7dcde] bg-white text-[#986f7a] disabled:cursor-default! disabled:opacity-100!">
-        <Bell size={16} strokeWidth={1.7} aria-hidden="true" />
-      </button>
+      <NotificationBell onNavigate={onNotificationNavigate} />
       <div ref={container} className="relative">
         <button ref={trigger} type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen(previous => !previous)} className="flex min-h-9 max-w-[220px] items-center gap-2 rounded-lg border border-[#dfcdd2] bg-[#fffdfd] px-2 py-1 text-left hover:bg-[#f8edef] focus-visible:outline-offset-2">
           <span className="grid size-7 shrink-0 place-items-center rounded-md bg-[#831f37] text-[.65rem] font-semibold text-white" aria-hidden="true">{initials}</span>
@@ -51,8 +50,8 @@ export function AccountMenu({ name, role }) {
               <p className="mt-1 text-xs text-[#80616c] [overflow-wrap:anywhere]">{user.email}</p>
             </div>
             <div className="py-1">
-              <button type="button" disabled className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left text-sm text-[#80616c] disabled:cursor-default! disabled:opacity-100!"><UserRound size={16} aria-hidden="true" /> Profile</button>
-              <button type="button" disabled className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left text-sm text-[#80616c] disabled:cursor-default! disabled:opacity-100!"><Settings size={16} aria-hidden="true" /> Settings</button>
+              <button type="button" onClick={()=>{if(onNotificationNavigate({kind:'profile'})!==false)setOpen(false)}} className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left text-sm text-[#80616c] hover:bg-[#f8edef]"><UserRound size={16} aria-hidden="true" /> Profile</button>
+              {user.role==='admin'&&<button type="button" onClick={()=>{if(onNotificationNavigate({kind:'settings'})!==false)setOpen(false)}} className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left text-sm text-[#80616c] hover:bg-[#f8edef]"><Settings size={16} aria-hidden="true" /> System settings</button>}
             </div>
             <div className="border-t border-[#e7dcde]"><SignOutButton variant="menu" /></div>
           </div>

@@ -33,5 +33,5 @@ export function AuthProvider({ children }) {
     setSession({ status: 'ready', user: null })
   }
 
-  return <AuthContext.Provider value={{ ...session, retry, login, logout }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ ...session, retry, login, logout, refreshUser: user => setSession(previous => ({ ...previous, user })) }}>{children}</AuthContext.Provider>
 }

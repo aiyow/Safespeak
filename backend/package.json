@@ -6,7 +6,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js --local-signup",
-    "test:faqs": "node scripts/test-faqs.mjs"
+    "test:sessions": "node --test scripts/test-session-config.mjs",
+    "test:faqs": "node scripts/test-faqs.mjs",
+    "test:users": "node scripts/test-users.mjs",
+    "test:submissions": "node scripts/test-submissions.mjs",
+    "test:workflow": "node scripts/test-workflow.mjs",
+    "test:referrals": "node scripts/test-workflow.mjs --referrals",
+    "test:modules": "node scripts/test-workflow.mjs --referrals --modules"
   },
   "keywords": [],
   "author": "",

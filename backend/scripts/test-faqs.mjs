@@ -1,5 +1,7 @@
-import 'dotenv/config';
+import '../config/env.js';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
@@ -11,7 +13,7 @@ let pool,server,created=false;
 try {
  await root.query(`CREATE DATABASE "${db}"`); created=true; process.env.DB_NAME=db;
  pool=(await import('../config/db.js')).pool;
- for (const file of ['000_initial_schema.sql','001_auth_sessions.sql','auth_runtime_grants.sql','002_registration_details.sql','003_faq_audit_permissions.sql']) {
+ for (const file of ['000_initial_schema.sql','001_auth_sessions.sql','auth_runtime_grants.sql','002_registration_details.sql','003_faq_audit_permissions.sql','004_user_access.sql','005_concern_categories.sql','006_coordinator_access.sql','007_category_management.sql','008_concern_submission.sql','009_category_deletion.sql','010_concern_workflow.sql','011_referrals_notifications.sql','012_reports_profile_settings.sql']) {
   await pool.query(await readFile(new URL(`../database/${file}`,import.meta.url),'utf8'));
  }
  // Verify the fresh-install runtime grants can register a student, not just read FAQs.
@@ -37,6 +39,16 @@ try {
  const {createSession}=await import('../services/sessions.js');
  const {sessionCookie,clientOrigin}=await import('../config/auth.js');
  for(const role of ['admin','student','personnel']) {ids[role]=(await pool.query('INSERT INTO users(full_name,email,password_hash,role) VALUES($1,$2,$3,$4) RETURNING id',[`Test ${role}`,`${role}@example.invalid`,hash,role])).rows[0].id; tokens[role]=await createSession(ids[role]);}
+ // A new backend process must accept a previously issued token and stored session.
+ const resumed=spawnSync(process.execPath,['--input-type=module','-e',`
+  const {readFileSync}=await import('node:fs');
+  const {getSessionUser}=await import(${JSON.stringify(new URL('../services/sessions.js',import.meta.url).href)});
+  const {pool}=await import(${JSON.stringify(new URL('../config/db.js',import.meta.url).href)});
+  try { process.stdout.write(JSON.stringify(await getSessionUser(readFileSync(0,'utf8')))); }
+  finally { await pool.end(); }
+ `],{cwd:fileURLToPath(new URL('../../',import.meta.url)),env:{...process.env},input:tokens.student,encoding:'utf8',timeout:15000});
+ assert.equal(resumed.status,0,resumed.stderr);
+ assert.equal(JSON.parse(resumed.stdout)?.id,ids.student,'Stored session must survive a backend process restart');
  const {default:app}=await import('../app.js'); server=app.listen(process.argv.includes('--preview')?5001:0,'127.0.0.1'); await new Promise(r=>server.once('listening',r));
  const base=`http://127.0.0.1:${server.address().port}/api/v1`; let checks=0;
  async function req(path,options={},status=200) {

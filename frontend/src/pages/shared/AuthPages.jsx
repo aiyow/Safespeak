@@ -48,7 +48,7 @@ export function LoginPage() {
   return (
     <AuthLayout title="Welcome back" description="Sign in to your SafeSpeak account.">
       <form className="grid gap-[19px]" onSubmit={submit}>
-        {location.state?.registered && <p className="m-0 rounded-lg border border-[#bfe2d8] bg-[#ecfaf5] px-[13px] py-[11px] text-[.9rem] leading-normal text-[#155e4a]" role="status">Account created. Sign in to continue.</p>}
+        {location.state?.registered && <p className="m-0 rounded-lg border border-[#eacbd2] bg-[#f8edef] px-[13px] py-[11px] text-[.9rem] leading-normal text-[#831f37]" role="status">Account created. Sign in to continue.</p>}
         <EmailField />
         <PasswordField />
         {error && <p className="m-0 rounded-lg border border-[#ebc2c2] bg-[#fff1f0] px-[13px] py-[11px] text-[.9rem] leading-normal text-[#872b2b]" role="alert">{error}</p>}

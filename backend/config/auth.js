@@ -1,5 +1,4 @@
-import 'dotenv/config';
-import { randomBytes } from 'node:crypto';
+import './env.js';
 
 export const host = process.env.HOST || '127.0.0.1';
 const localHosts = new Set(['127.0.0.1', '[::1]', '::1', 'localhost']);
@@ -23,12 +22,13 @@ if (clientUrl.protocol !== 'https:' && !(localDevelopment && clientUrl.protocol 
   throw new Error('CLIENT_URL must use HTTPS outside loopback development.');
 }
 
+// A restart must reuse the configured key; never silently generate a temporary one.
 const jwtSecret = process.env.JWT_SECRET;
-if ((!jwtSecret && !localDevelopment) || (jwtSecret && Buffer.byteLength(jwtSecret) < 32)) {
-  throw new Error('Set JWT_SECRET to a random secret of at least 32 bytes.');
+if (!jwtSecret?.trim() || Buffer.byteLength(jwtSecret) < 5) {
+  throw new Error('Set JWT_SECRET in backend/.env to a persistent random secret of at least 5 bytes.');
 }
 
-export const sessionSigningKey = jwtSecret || randomBytes(32);
+export const sessionSigningKey = jwtSecret;
 export const sessionDuration = 8 * 60 * 60 * 1000;
 export const sessionCookie = localDevelopment ? 'safespeak_session' : '__Host-safespeak_session';
 export const cookieOptions = {

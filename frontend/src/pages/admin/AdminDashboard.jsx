@@ -1,15 +1,24 @@
+import { Reports } from './Reports.jsx'
+import { SystemSettings } from './SystemSettings.jsx'
+import { Profile } from '../shared/Profile.jsx'
+import { CategoryManagement } from './CategoryManagement.jsx'
+import { UsersAccess } from './UsersAccess.jsx'
 import { useState } from 'react'
-import { ArrowRight, BookOpen, ChevronRight, Clock3, Database, Inbox, LayoutGrid, ShieldCheck, UsersRound } from 'lucide-react'
+import { ArrowRight, BarChart3, BookOpen, ChevronRight, Clock3, Database, Inbox, LayoutGrid, ShieldCheck, UsersRound } from 'lucide-react'
 import { WorkspaceMetrics, WorkspaceSidebar, WorkspaceTable, WorkspaceTopbar } from '../../components/WorkspaceChrome.jsx'
 import { useAuth } from '../../context/authContext.js'
 import { FAQManagement } from './FAQManagement.jsx'
 import { AuditLogs, AuditRows, AuditDetail } from './AuditLogs.jsx'
 import { useApiList } from '../../hooks/useApiList.js'
 import { Feedback } from '../../components/ModuleUI.jsx'
+import { Notifications } from '../shared/Notifications.jsx'
+import { useSearchParams } from 'react-router-dom'
 const modules = [
   { key: 'users', label: 'Users & access', description: 'Accounts, roles, and access scope', icon: UsersRound },
+  { key: 'categories', label: 'Category Management', description: 'Concern categories and availability', icon: Inbox },
   { key: 'faq', label: 'FAQ Management', description: 'Help desk answers for students', icon: BookOpen },
-  { key: 'system', label: 'System & data', description: 'Configuration and data management', icon: Database },
+  { key: 'reports', label: 'Reports', description: 'Concern statistics and trends', icon: BarChart3 },
+  { key: 'system', label: 'System Settings', description: 'Submissions and Help Desk information', icon: Database },
   { key: 'activity', label: 'Audit Logs', description: 'Administrative actions and system events', icon: Clock3 },
 ]
 const sections = [{ key: 'overview', label: 'Overview', icon: LayoutGrid }, ...modules]
@@ -23,9 +32,12 @@ const metrics = [
 
 function AdminOverview({ onSelect }) {
   const faqs = useApiList('/admin/faqs', { publication: 'published', pageSize: 1 })
+  const summary = useApiList('/admin/users/summary')
+  const concernSummary = useApiList('/admin/reports/summary')
   const logs = useApiList('/admin/audit-logs', { pageSize: 5 })
   const [selectedLog, setSelectedLog] = useState(null)
   const liveMetrics = metrics.map(item => item.label === 'Published FAQs' ? { ...item, value: !faqs.loading && !faqs.error && faqs.pagination.total > 0 ? faqs.pagination.total : '' } : item)
+  const userMetrics = liveMetrics.map(item => item.label === 'Concern records' ? {...item,value:concernSummary.data.total || ''} : item.label === 'Accounts' ? { ...item, value: summary.data.accounts || '' } : item.label === 'CCS personnel' ? { ...item, value: summary.data.personnel || '' } : item)
   return (
     <>
       <div className="mb-7 flex items-center justify-between gap-[18px] [&_h1]:font-[Baskervville,Georgia,serif] [&_h1]:text-[clamp(2rem,3.1vw,2.7rem)] [&_h1]:leading-[1.13] [&_h1]:font-normal [&_h1]:tracking-[-.033em] max-[720px]:flex-col max-[720px]:items-start">
@@ -38,7 +50,7 @@ function AdminOverview({ onSelect }) {
           Manage users <ArrowRight size={16} aria-hidden="true" />
         </button>
       </div>
-      <Feedback loading={faqs.loading || logs.loading} error={faqs.error || logs.error} reload={() => { faqs.reload(); logs.reload() }} /><WorkspaceMetrics metrics={liveMetrics} />
+      <Feedback loading={faqs.loading || logs.loading || concernSummary.loading} error={faqs.error || logs.error || summary.error || concernSummary.error} reload={() => { faqs.reload(); logs.reload(); summary.reload(); concernSummary.reload() }} /><WorkspaceMetrics metrics={userMetrics} />
       <div className="mb-7 grid grid-cols-[minmax(0,2.2fr)_minmax(230px,1fr)] items-start gap-6 max-[830px]:grid-cols-1">
         <section className="min-w-0 rounded-xl border border-[#e7dcde] bg-[#fffdfd] shadow-[0_4px_18px_#30222606] p-[clamp(20px,3vw,30px)] [&_h2]:font-[Baskervville,Georgia,serif] [&_h2]:text-[clamp(1.7rem,3vw,2.3rem)] [&_h2]:leading-[1.13] [&_h2]:font-normal [&_h2]:tracking-[-.033em]" aria-labelledby="management-title">
         <p className="mb-3 text-[.67rem] font-[660] tracking-[.15em] text-[#80515c] uppercase">System management</p>
@@ -71,18 +83,28 @@ function AdminOverview({ onSelect }) {
 
 export function AdminDashboard() {
   const { user } = useAuth()
-  const [selected, setSelected] = useState('overview')
-  const section = sections.find(item => item.key === selected)
+  const [sectionKey, setSection] = useState('overview')
+  const [params,setParams] = useSearchParams()
+  const selected = params.has('notifications') ? 'notifications' : params.has('profile') ? 'profile' : sectionKey
+  function setSelected(key) { setSection(key); setParams(['notifications','profile'].includes(key) ? {[key]:'1'} : {}, {replace:true}); window.scrollTo(0,0); return true }
+  function navigateNotification(target) { if(target.kind === 'profile')return setSelected('profile'); if(target.kind === 'settings')return setSelected('system'); return target.kind === 'notifications' ? setSelected('notifications') : false }
+  const section = sections.find(item => item.key === selected) || {label:selected === 'profile' ? 'Profile' : 'Notifications'}
 
   return (
     <div className="grid min-h-svh grid-cols-[238px_minmax(0,1fr)] bg-[#f7f4f4] text-[#271d20] [&_:focus-visible]:outline-[#b71f38] max-[720px]:grid-cols-1" data-role="admin">
       <WorkspaceSidebar label="Administration" sections={sections} selected={selected} onSelect={setSelected} />
       <div className="min-w-0">
-        <WorkspaceTopbar label="Administration" section={section.label} role="Administrator" name={user.fullName} />
+        <WorkspaceTopbar label="Administration" section={section.label} role="Administrator" name={user.fullName} onNotificationNavigate={navigateNotification} />
         <main className="mx-auto w-full max-w-[1400px] px-[clamp(18px,4vw,44px)] pt-9 pb-11">
           {selected === 'overview' && <AdminOverview onSelect={setSelected} />}
           <div hidden={selected !== 'faq'}><FAQManagement /></div>
+          {selected === 'categories' && <CategoryManagement />}
+          {selected === 'users' && <UsersAccess />}
           {selected === 'activity' && <AuditLogs />}
+          {selected === 'reports' && <Reports />}
+          {selected === 'system' && <SystemSettings />}
+          {selected === 'notifications' && <Notifications onNavigate={navigateNotification} />}
+          {selected === 'profile' && <Profile />}
         </main>
       </div>
     </div>

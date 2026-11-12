@@ -35,13 +35,13 @@ export function WorkspaceSidebar({ label, sections, selected, onSelect, children
   )
 }
 
-export function WorkspaceTopbar({ label, section, role, name }) {
+export function WorkspaceTopbar({ label, section, role, name, onNotificationNavigate }) {
   return (
     <header className="sticky top-0 z-30 flex min-h-14 items-center justify-between gap-3 border-b border-[#e7dcde] bg-[#fffafa] px-[clamp(18px,4vw,44px)] py-2">
       <div className="flex min-w-0 items-center gap-2 text-xs [&_svg]:shrink-0 [&_svg]:text-[#907980]">
         <span className="shrink-0 max-[640px]:hidden">{label}</span><ChevronRight size={12} aria-hidden="true" className="max-[640px]:hidden" /><span className="truncate">{section}</span>
       </div>
-      <AccountMenu name={name} role={role} />
+      <AccountMenu name={name} role={role} onNotificationNavigate={onNotificationNavigate} />
     </header>
   )
 }
@@ -70,7 +70,7 @@ export function WorkspaceTable({ id, title, description, columns, action, childr
         </div>
         {action}
       </div>
-      <div className="min-h-40 overflow-x-auto [scrollbar-width:thin] [scrollbar-color:#b48690_#f2e8ea]" role="region" aria-labelledby={id} tabIndex={0}>
+      <div className="relative min-h-40 overflow-x-auto [scrollbar-width:thin] [scrollbar-color:#b48690_#f2e8ea]" role="region" aria-labelledby={id} tabIndex={0}>
         <table className="w-full min-w-[570px] border-collapse text-left">
           <thead className="border-t border-b border-[#e7dcde] bg-[#f9f5f6] text-[.64rem] tracking-[.07em] text-[#68595d] uppercase">
             <tr>{columns.map(column => <th key={column} scope="col" className="px-[clamp(10px,1.45vw,19px)] py-[13px] font-semibold whitespace-nowrap">{column}</th>)}</tr>

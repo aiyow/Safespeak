@@ -6,6 +6,13 @@ import { requireSession } from '../middleware/session.js';
 import { requestGuard, requireAdmin, validate, apiError } from '../middleware/api.js';
 import { mutateFaq, faqActions, faqWorkspace, saveFaqWorkspace } from '../services/faqs.js';
 
+import { userActions } from '../services/user-access.js';
+import { categoryActions } from '../services/categories.js';
+import { concernActions } from '../services/concern-workflow.js';
+import { referralActions } from '../services/referral-events.js';
+import { settingsActions } from '../services/portal-settings.js';
+import { profileActions } from '../services/profile.js';
+const auditActions=[...faqActions,...userActions,...categoryActions,...concernActions,...referralActions,...settingsActions,...profileActions];
 const router = Router();
 router.use((req,res,next) => /^\/(faqs|admin\/(faqs|audit-logs))(\/|$)/.test(req.path) ? next() : next('router')); 
 router.use(requestGuard, cookieParser(), (req,res,next) => json({ limit: req.method === 'PUT' && req.path === '/admin/faqs' ? '20mb' : '64kb' })(req,res,next), requireSession);
@@ -14,7 +21,7 @@ const query = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().max(300).default(''),
   publication: z.enum(['all', 'published', 'draft']).default('all'),
-  action: z.enum(['', ...faqActions]).default(''),
+  action: z.enum(['', ...auditActions]).default(''),
   actor: z.string().trim().max(150).default(''),
   from: z.iso.date().optional(), to: z.iso.date().optional(),
 });
@@ -54,7 +61,7 @@ router.delete('/admin/faqs/:id', async (req,res) => { await mutateFaq(req.user,v
 router.get('/admin/audit-logs', async (req,res) => {
   const q = validate(query,req.query);
   if (q.from && q.to && q.from > q.to) throw Object.assign(new Error('The end date must follow the start date.'), {status:400});
-  const values = [faqActions]; const conditions = ["a.entity_type='faq'", 'a.action=ANY($1::text[])'];
+  const values = [auditActions]; const conditions = ["a.entity_type IN ('faq','user','category','concern','referral','settings')", 'a.action=ANY($1::text[])'];
   function add(sql,value) { values.push(value); conditions.push(sql.replace('?',`$${values.length}`)); }
   if (q.action) add('a.action=?',q.action);
   if (q.actor) add("COALESCE(a.details->'actor'->>'fullName',u.full_name,'') ILIKE ?",literalSearch(q.actor));
@@ -63,7 +70,7 @@ router.get('/admin/audit-logs', async (req,res) => {
   if (q.to) add("a.created_at < ((?::date + 1)::timestamp AT TIME ZONE 'Asia/Manila')",q.to);
   const filter=conditions.join(' AND ');
   const total=Number((await pool.query(`SELECT count(*) FROM public.audit_logs a LEFT JOIN public.users u ON u.id=a.actor_user_id WHERE ${filter}`,values)).rows[0].count);
-  const {rows}=await pool.query(`SELECT a.id,a.action,a.entity_id AS "entityId",a.actor_user_id AS "actorId",COALESCE(a.details->'actor'->>'fullName',u.full_name,'Deleted account') AS "actorName",a.details,a.created_at AS "createdAt" FROM public.audit_logs a LEFT JOIN public.users u ON u.id=a.actor_user_id WHERE ${filter} ORDER BY a.created_at DESC,a.id DESC LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,q.pageSize,(q.page-1)*q.pageSize]);
+  const {rows}=await pool.query(`SELECT a.id,a.action,a.entity_type AS "entityType",a.entity_id AS "entityId",a.actor_user_id AS "actorId",COALESCE(a.details->'actor'->>'fullName',u.full_name,'Deleted account') AS "actorName",a.details,a.created_at AS "createdAt" FROM public.audit_logs a LEFT JOIN public.users u ON u.id=a.actor_user_id WHERE ${filter} ORDER BY a.created_at DESC,a.id DESC LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,q.pageSize,(q.page-1)*q.pageSize]);
   res.json({data:rows,pagination:{page:q.page,pageSize:q.pageSize,total}});
 });
 router.use(apiError);
